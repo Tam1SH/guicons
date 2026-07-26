@@ -1821,7 +1821,7 @@ checksum = "b40ca9252762c466af32d0b1002e91e4e1bc5398f77455e55474deb466355ff5"
 
 [[package]]
 name = "guicons"
-version = "0.1.2"
+version = "0.2.0"
 dependencies = [
  "guicons-macros",
  "image",
@@ -1830,7 +1830,7 @@ dependencies = [
 
 [[package]]
 name = "guicons-build"
-version = "0.1.2"
+version = "0.2.0"
 dependencies = [
  "guicons-core",
  "guicons-net",
@@ -1839,7 +1839,7 @@ dependencies = [
 
 [[package]]
 name = "guicons-core"
-version = "0.1.2"
+version = "0.2.0"
 dependencies = [
  "dunce",
  "petgraph",
@@ -1861,7 +1861,7 @@ dependencies = [
 
 [[package]]
 name = "guicons-macros"
-version = "0.1.2"
+version = "0.2.0"
 dependencies = [
  "guicons-core",
  "guicons-net",
@@ -1872,7 +1872,7 @@ dependencies = [
 
 [[package]]
 name = "guicons-net"
-version = "0.1.2"
+version = "0.2.0"
 dependencies = [
  "dirs",
  "guicons-core",

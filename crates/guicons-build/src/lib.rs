@@ -27,9 +27,6 @@ fn load_icon_manifest(manifest_path: &std::path::Path) -> IconManifest {
     manifest
 }
 
-/// What to generate from the manifest. Output paths are fixed (`OUT_DIR/icons.rs`,
-/// `OUT_DIR/icons.slint`), not caller-configurable: `include_icons!()` hardcodes
-/// the Rust registry's location, so it can't be allowed to move.
 pub enum Emit {
     Rust,
     Slint,
@@ -42,6 +39,7 @@ pub struct IconBuild {
     emit_rust: bool,
     emit_slint: bool,
     slint_image_resolver: bool,
+    windows_reactor_image_resolver: bool,
 }
 
 impl IconBuild {
@@ -54,6 +52,7 @@ impl IconBuild {
             emit_rust: false,
             emit_slint: false,
             slint_image_resolver: false,
+            windows_reactor_image_resolver: false,
         }
     }
 
@@ -74,12 +73,13 @@ impl IconBuild {
         self
     }
 
-    /// Also emit a `resolve_image()` Rust helper next to `resolve()` that
-    /// resolves straight to a `slint::Image` via `guicons::slint::image_from_data`.
-    /// Only meaningful together with `.emit(Emit::Rust)`; the consumer must
-    /// depend on `slint` and on `guicons` with its `slint` feature enabled.
     pub fn with_slint_image_resolver(mut self) -> Self {
         self.slint_image_resolver = true;
+        self
+    }
+
+    pub fn with_windows_reactor_image_resolver(mut self) -> Self {
+        self.windows_reactor_image_resolver = true;
         self
     }
 
@@ -94,6 +94,7 @@ impl IconBuild {
                 &out_file,
                 &icons,
                 self.slint_image_resolver,
+                self.windows_reactor_image_resolver,
             );
         }
 

@@ -10,6 +10,9 @@ pub mod slint;
 #[cfg(feature = "iced")]
 pub mod iced;
 
+#[cfg(feature = "windows-reactor")]
+pub mod windows_reactor;
+
 #[cfg(feature = "macros")]
 pub use guicons_macros::{icon, icon_data, icon_key};
 
