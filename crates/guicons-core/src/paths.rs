@@ -96,13 +96,46 @@ pub fn resolve_manifest_redirect_content(path: &Path, content: &str) -> PathBuf 
     let Some(target) = root.pointer("/root_manifest").and_then(|v| v.as_str()) else {
         return path.to_path_buf();
     };
-    // Canonicalized (unlike the pass-through branches above, which return
-    // `path` completely unchanged on purpose - see `load()`'s use of this
-    // to decide whether `content_override` still applies) because a
+    // Lexically normalized first (unlike the pass-through branches above,
+    // which return `path` completely unchanged on purpose - see `load()`'s
+    // use of this to decide whether `content_override` still applies): a
     // `root_manifest` value is almost always a `../`-relative path, and
-    // `Path::join` never collapses those - leaving them in would make two
-    // pointers resolving to the very same real file compare unequal.
-    canonicalize_or_self(&path.parent().unwrap_or_else(|| Path::new(".")).join(target))
+    // `Path::join` never collapses those on its own. This can't lean on
+    // `canonicalize_or_self` alone the way the rest of this module does -
+    // POSIX `open()` needs every *named* path component to exist to walk
+    // through it, `..` included, so a literal, uncollapsed `crates/app/../..`
+    // fails to even open when `crates/app` doesn't exist (an unsaved stub
+    // file's own directory not existing yet is a real case here, not
+    // hypothetical) even though the fully-resolved target does. Windows
+    // tolerates this, which is why it only ever showed up on Linux CI.
+    // Canonicalized on top of that when possible (same reasoning as
+    // elsewhere: two pointers resolving to the same real file should
+    // compare equal), falling back to the lexical form otherwise.
+    canonicalize_or_self(&normalize_lexically(&path.parent().unwrap_or_else(|| Path::new(".")).join(target)))
+}
+
+/// Collapses `.`/`..` components by string manipulation alone, never
+/// touching the filesystem - unlike `canonicalize`, doesn't require any
+/// path component (including ones a trailing `..` immediately discards)
+/// to actually exist. Doesn't resolve symlinks the way a real
+/// canonicalize would; only meant as a fallback for a path that can't be
+/// canonicalized yet (nothing on disk at that location, possibly not
+/// even the intermediate directories) but still needs to be usable as a
+/// literal path for `fs::read`/`fs::write` right now.
+fn normalize_lexically(path: &Path) -> PathBuf {
+    let mut result = PathBuf::new();
+    for component in path.components() {
+        match component {
+            std::path::Component::ParentDir => {
+                if !result.pop() {
+                    result.push(component);
+                }
+            }
+            std::path::Component::CurDir => {}
+            other => result.push(other),
+        }
+    }
+    result
 }
 
 #[cfg(test)]
@@ -138,6 +171,19 @@ mod tests {
     fn resolve_manifest_redirect_leaves_a_missing_file_untouched() {
         let missing = Path::new("/does/not/exist/icons.gui.toml");
         assert_eq!(resolve_manifest_redirect(missing), missing);
+    }
+
+    /// Nothing here touches disk at all - not the stub, not its parent
+    /// directory, not the target - the "brand new, never-saved buffer"
+    /// case. `..` still has to collapse lexically for the result to be a
+    /// path `fs::read`/`fs::write` can actually open, since POSIX `open()`
+    /// requires every named component (including ones a trailing `..`
+    /// discards) to exist to walk through it at all.
+    #[test]
+    fn resolve_manifest_redirect_content_collapses_dotdot_even_when_nothing_exists_on_disk() {
+        let stub_path = Path::new("/nonexistent/crates/app/icons.gui.toml");
+        let resolved = resolve_manifest_redirect_content(stub_path, "root_manifest = \"../../icons.gui.toml\"\n");
+        assert_eq!(resolved, Path::new("/nonexistent/icons.gui.toml"));
     }
 
     #[test]
