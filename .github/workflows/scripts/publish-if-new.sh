@@ -21,7 +21,22 @@ if [ "$status" = "200" ]; then
 fi
 
 echo "publishing $crate $version"
-cargo publish -p "$crate"
+# The pre-check above hits crates.io's REST API, which can lag behind the
+# sparse index `cargo publish` itself checks against - hit this exactly
+# once (a prior run's publish step succeeded, but a rerun's pre-check
+# still saw a stale 404 minutes later). Treat cargo's own "already
+# exists" as the authoritative, race-free answer and fall through to
+# skip instead of failing the whole workflow over a slow-to-propagate
+# API response.
+if ! output=$(cargo publish -p "$crate" 2>&1); then
+  echo "$output"
+  if echo "$output" | grep -q "already exists on crates.io index"; then
+    echo "$crate $version is already published (crates.io's REST API just hadn't caught up yet) - skipping"
+    exit 0
+  fi
+  exit 1
+fi
+echo "$output"
 # A freshly published crate needs a few seconds to show up in the index
 # before the next crate's `cargo publish` (which depends on it) can
 # resolve it.
