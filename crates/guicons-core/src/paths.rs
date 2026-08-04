@@ -144,6 +144,12 @@ mod tests {
     fn resolve_manifest_redirect_content_resolves_a_relative_pointer() {
         let dir = tempdir().unwrap();
         let stub_path = dir.path().join("crates/app/icons.gui.toml");
+        // `canonicalize` needs every intermediate directory in the joined
+        // `../..`-relative path to actually exist on disk to resolve it at
+        // all (Linux is strict about this; Windows' own canonicalize
+        // tolerated a non-existent `crates/app/` here, which is exactly
+        // why this only failed on the Linux CI runner and not locally).
+        fs::create_dir_all(stub_path.parent().unwrap()).unwrap();
         fs::write(dir.path().join("icons.gui.toml"), "").unwrap();
 
         let resolved = resolve_manifest_redirect_content(&stub_path, "root_manifest = \"../../icons.gui.toml\"\n");
