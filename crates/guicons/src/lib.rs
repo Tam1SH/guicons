@@ -24,6 +24,7 @@ macro_rules! include_icons {
         $crate::include_icons!(icons);
     };
     ($module:ident) => {
+        #[allow(dead_code, unused_imports)]
         mod $module {
             include!(concat!(env!("OUT_DIR"), "/icons.rs"));
         }
