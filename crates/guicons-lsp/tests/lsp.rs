@@ -1149,6 +1149,59 @@ async fn hover_in_a_rust_file_only_resolves_against_its_own_crates_manifest() {
     assert!(!value.contains("other.svg"), "must not pick up crate b's entry: {value}");
 }
 
+/// A crate's own `icons.gui.toml` can be a pointer (`root_manifest = "..."`)
+/// to a manifest shared elsewhere in the workspace - hover should follow
+/// it transparently, same as if the real manifest sat right next to the
+/// crate.
+#[tokio::test]
+async fn hover_in_a_rust_file_follows_a_root_manifest_pointer_to_a_shared_manifest() {
+    let dir = tempdir().unwrap();
+
+    write(dir.path(), "docker.svg", "<svg/>");
+    write(dir.path(), "icons.gui.toml", "[docker]\nfile = \"docker.svg\"\n");
+
+    write(dir.path(), "crates/app/Cargo.toml", "[package]\nname = \"app\"\nversion = \"0.0.0\"\n");
+    write(dir.path(), "crates/app/icons.gui.toml", "root_manifest = \"../../icons.gui.toml\"\n");
+    let rs_content = "fn f() { let _ = icon!(docker); }";
+    let rs_path = write(dir.path(), "crates/app/src/main.rs", rs_content);
+
+    let uri = file_uri(&rs_path);
+    let (mut service, _socket) = guicons_lsp::service();
+    call(
+        &mut service,
+        "initialize",
+        Some(json!({ "capabilities": {}, "rootUri": file_uri(dir.path()) })),
+        Some(1),
+    )
+    .await;
+    call(&mut service, "initialized", Some(json!({})), None).await;
+    call(
+        &mut service,
+        "textDocument/didOpen",
+        Some(json!({
+            "textDocument": { "uri": uri, "languageId": "rust", "version": 1, "text": rs_content }
+        })),
+        None,
+    )
+    .await;
+
+    let offset = rs_content.find("docker").unwrap();
+    let result = call(
+        &mut service,
+        "textDocument/hover",
+        Some(json!({
+            "textDocument": { "uri": uri },
+            "position": { "line": 0, "character": offset }
+        })),
+        Some(2),
+    )
+    .await
+    .expect("hover response");
+
+    let value = result["contents"]["value"].as_str().unwrap();
+    assert!(value.contains("docker.svg"), "should resolve the shared root manifest's entry: {value}");
+}
+
 #[tokio::test]
 async fn initialize_reads_the_report_toml_syntax_errors_option() {
     let (mut service, _socket) = guicons_lsp::service();

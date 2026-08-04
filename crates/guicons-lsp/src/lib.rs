@@ -9,7 +9,7 @@ mod references;
 mod rename;
 
 use guicons_core::{IconEntrySource, IconManifest};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use tokio::sync::RwLock;
 use tower_lsp::jsonrpc::Result;
@@ -184,9 +184,22 @@ impl Backend {
     async fn scan_workspace_manifests(&self, workspace_root: &Path) {
         let extra_skip_dirs = self.extra_skip_dirs.read().await.clone();
         let mut manifests = HashMap::new();
+        // A crate's `icons.gui.toml` can be a pointer to a manifest shared
+        // elsewhere (`root_manifest = "..."`, see `guicons_core::
+        // resolve_manifest_redirect`) - `find_manifest_files` finds every
+        // such pointer *and* the real file they all resolve to, purely by
+        // filename. Deduping on the resolved path (cheap: just reads and
+        // checks for a `root_manifest` key, no full parse) before the real
+        // `load_icon_manifest` call keeps a shared manifest from being
+        // parsed once per pointer that redirects to it.
+        let mut resolved_seen: HashSet<PathBuf> = HashSet::new();
         for manifest_path in find_manifest_files(workspace_root, &extra_skip_dirs) {
+            let resolved = guicons_core::canonicalize_or_self(&guicons_core::resolve_manifest_redirect(&manifest_path));
+            if !resolved_seen.insert(resolved.clone()) {
+                continue;
+            }
             let (manifest, _) = guicons_core::load_icon_manifest(&manifest_path);
-            manifests.insert(guicons_core::canonicalize_or_self(&manifest_path), manifest);
+            manifests.insert(resolved, manifest);
         }
         *self.manifests.write().await = manifests;
     }
@@ -194,13 +207,19 @@ impl Backend {
     /// Keeps `manifests` in sync with an open `.gui.toml` document's live
     /// buffer content (not just what's on disk) - mirrors how
     /// `publish_diagnostics_for` already treats the open document as the
-    /// source of truth over the file on disk.
+    /// source of truth over the file on disk. Keyed by the manifest's own
+    /// resolved path (same as `scan_workspace_manifests`), not `path`
+    /// itself - `path` might be a pointer, in which case `text` is its
+    /// one-line redirect content, not real manifest content, and
+    /// `load_icon_manifest_from_str` already follows it to load the real
+    /// file from disk instead.
     async fn refresh_manifest_if_relevant(&self, path: &Path, text: &str) {
         if path.file_name() != Some(std::ffi::OsStr::new("icons.gui.toml")) {
             return;
         }
         let (manifest, _) = guicons_core::load_icon_manifest_from_str(path, text);
-        self.manifests.write().await.insert(path.to_path_buf(), manifest);
+        let key = guicons_core::canonicalize_or_self(manifest.manifest_path());
+        self.manifests.write().await.insert(key, manifest);
     }
 
     /// Warms the cache for any provider this manifest declares that isn't

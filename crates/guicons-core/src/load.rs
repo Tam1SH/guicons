@@ -13,7 +13,7 @@ use crate::diagnostics::{Diagnostics, ManifestError};
 use crate::graph::{build_manifest_graph, ManifestFile, ManifestGraph};
 use crate::model::{IconEntry, IconManifest};
 use crate::parse::{collect_entries, parse_defaults, parse_providers, resolve_providers};
-use crate::paths::find_workspace_root;
+use crate::paths::{find_workspace_root, resolve_manifest_redirect, resolve_manifest_redirect_content};
 use petgraph::graph::NodeIndex;
 use petgraph::visit::EdgeRef;
 use std::collections::HashMap;
@@ -39,6 +39,22 @@ pub fn load_icon_manifest_from_str(manifest_path: &Path, content: &str) -> (Icon
 }
 
 fn load(manifest_path: &Path, content_override: Option<&str>) -> (IconManifest, Vec<ManifestError>) {
+    // `manifest_path` itself might be a pointer (a stub `icons.gui.toml`
+    // next to a crate that shares a manifest living elsewhere - see
+    // `resolve_manifest_redirect`'s doc comment) - resolved before
+    // anything else touches it, so every caller (`build.rs`, the LSP, the
+    // IDE plugin) transparently ends up loading the real manifest instead.
+    // `content_override` only still applies once resolution lands back on
+    // the same path (i.e. it wasn't a pointer) - it's the *edited
+    // buffer's* content, which is meaningless once resolution has moved
+    // on to a different, on-disk file.
+    let resolved_path = match content_override {
+        Some(content) => resolve_manifest_redirect_content(manifest_path, content),
+        None => resolve_manifest_redirect(manifest_path),
+    };
+    let content_override = if resolved_path == manifest_path { content_override } else { None };
+    let manifest_path = &resolved_path;
+
     let mut errors = Vec::new();
     let file_graph = build_manifest_graph(manifest_path, content_override, &mut errors);
     let source_paths: Vec<_> = file_graph.graph.node_weights().map(|file| file.path.clone()).collect();

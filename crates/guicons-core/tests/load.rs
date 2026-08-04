@@ -426,3 +426,52 @@ fn entries_carry_the_file_they_were_declared_in_even_across_includes() {
     assert_eq!(manifest.entry_for_key("docker").unwrap().file(), root_canon);
     assert_eq!(manifest.entry_for_key("back").unwrap().file(), nav_canon);
 }
+
+/// A crate's own `icons.gui.toml` can be a pointer (`root_manifest = "..."`)
+/// to a manifest shared elsewhere, instead of a real manifest - the
+/// monorepo case where several crates share one `icons.gui.toml` that
+/// doesn't live next to any of them. `load_icon_manifest` should
+/// transparently load whatever the pointer resolves to.
+#[test]
+fn load_icon_manifest_follows_a_root_manifest_pointer() {
+    let dir = tempdir().unwrap();
+    write(dir.path(), "docker.svg", "<svg/>");
+    write(
+        dir.path(),
+        "icons.gui.toml",
+        r#"
+        [docker]
+        file = "docker.svg"
+        "#,
+    );
+    let stub = write(dir.path(), "crates/app/icons.gui.toml", "root_manifest = \"../../icons.gui.toml\"\n");
+
+    let (manifest, errors) = load_icon_manifest(&stub);
+    assert!(errors.is_empty(), "{errors:?}");
+    assert!(manifest.entry_for_key("docker").is_some());
+    assert_eq!(manifest.manifest_path(), canonicalize_or_self(dir.path()).join("icons.gui.toml"));
+}
+
+/// Same as above, but for the editor-tooling path: the pointer file
+/// itself is the one with unsaved buffer content (the redirect line),
+/// which should still resolve to the real, on-disk manifest rather than
+/// being parsed as manifest content in its own right.
+#[test]
+fn load_icon_manifest_from_str_follows_a_root_manifest_pointer_in_the_edited_buffer() {
+    let dir = tempdir().unwrap();
+    write(dir.path(), "docker.svg", "<svg/>");
+    write(
+        dir.path(),
+        "icons.gui.toml",
+        r#"
+        [docker]
+        file = "docker.svg"
+        "#,
+    );
+    let stub_path = dir.path().join("crates/app/icons.gui.toml");
+
+    let (manifest, errors) =
+        load_icon_manifest_from_str(&stub_path, "root_manifest = \"../../icons.gui.toml\"\n");
+    assert!(errors.is_empty(), "{errors:?}");
+    assert!(manifest.entry_for_key("docker").is_some());
+}

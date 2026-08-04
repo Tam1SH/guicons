@@ -6,9 +6,13 @@ use std::path::PathBuf;
 use syn::parse::{Parse, ParseStream};
 use syn::{parse_macro_input, Error, LitInt, LitStr, Result, Token};
 
-#[cfg(all(feature = "slint", feature = "iced"))]
+#[cfg(any(
+    all(feature = "slint", feature = "iced"),
+    all(feature = "slint", feature = "windows-reactor"),
+    all(feature = "iced", feature = "windows-reactor")
+))]
 compile_error!(
-    "guicons-macros: enable only one of the `slint`/`iced` features at a time - `icon!` picks its \
+    "guicons-macros: enable only one of the `slint`/`iced`/`windows-reactor` features at a time - `icon!` picks its \
      target automatically from whichever is active. Use `icon_data!` if you need the plain `IconData` \
      regardless of which GUI feature is enabled."
 );
@@ -24,6 +28,8 @@ enum Target {
     Slint,
     #[cfg(feature = "iced")]
     Iced,
+    #[cfg(feature = "windows-reactor")]
+    WindowsReactor,
 }
 
 fn active_target() -> Target {
@@ -31,6 +37,8 @@ fn active_target() -> Target {
     return Target::Slint;
     #[cfg(feature = "iced")]
     return Target::Iced;
+    #[cfg(feature = "windows-reactor")]
+    return Target::WindowsReactor;
     #[allow(unreachable_code)]
     Target::Data
 }
@@ -260,6 +268,17 @@ fn emit_for_target(resolved: ResolvedSource, target: Target) -> proc_macro2::Tok
                 guicons::iced::glyph_from_data(#data_tokens).expect("guicons: icon entry is not a glyph")
             },
         },
+        #[cfg(feature = "windows-reactor")]
+        Target::WindowsReactor => match resolved {
+            // A builder, not a finished `Icon` - the use site sets the size
+            // (`icon!(x).size(16.0)`), then `.build()` or `Into<Icon>`.
+            ResolvedSource::Image { path, .. } => quote! {
+                guicons::windows_reactor::icon_builder(#path)
+            },
+            ResolvedSource::Glyph { font_family, codepoint } => quote! {
+                guicons::windows_reactor::glyph_icon(#font_family, #codepoint)
+            },
+        },
     }
 }
 
@@ -295,10 +314,21 @@ fn parse_selector_path(input: ParseStream<'_>) -> Result<IconSelector> {
     classify_segments(segments).map_err(|message| Error::new(Span::call_site(), message))
 }
 
+/// Nearest `icons.gui.toml` directory, walking up from `CARGO_MANIFEST_DIR` -
+/// workspaces that keep one shared manifest at the root (instead of one per
+/// crate) can use `icon!` from any member crate.
 fn manifest_dir() -> Result<PathBuf> {
-    let manifest_dir = std::env::var_os("CARGO_MANIFEST_DIR")
+    let start = std::env::var_os("CARGO_MANIFEST_DIR")
         .ok_or_else(|| Error::new(Span::call_site(), "CARGO_MANIFEST_DIR is not set"))?;
-    Ok(PathBuf::from(manifest_dir))
+    for dir in PathBuf::from(start).ancestors() {
+        if dir.join("icons.gui.toml").exists() {
+            return Ok(dir.to_path_buf());
+        }
+    }
+    Err(Error::new(
+        Span::call_site(),
+        "guicons manifest not found at CARGO_MANIFEST_DIR or any ancestor",
+    ))
 }
 
 fn load_manifest(path: &std::path::Path) -> Result<guicons_core::IconManifest> {

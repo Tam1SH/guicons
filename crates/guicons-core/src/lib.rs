@@ -23,4 +23,4 @@ pub use manifest_scan::find_manifest_files;
 pub use model::{IconEntry, IconEntrySource, IconManifest, ProviderSchema};
 pub use naming::{rust_const_name, rust_fn_name, rust_variant_name};
 pub use parse::{builtin_provider_names, decompose_iconify_id, parse_glyph_spec, try_parse_glyph_spec};
-pub use paths::{canonicalize_or_self, find_workspace_root_from, manifest_path_for_rust_file};
+pub use paths::{canonicalize_or_self, find_workspace_root_from, manifest_path_for_rust_file, resolve_manifest_redirect};
