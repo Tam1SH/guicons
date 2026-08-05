@@ -14,7 +14,7 @@ iced = ["dep:iced", "guicons-macros?/iced"]
 windows-reactor = ["dep:windows-reactor", "guicons-macros?/windows-reactor"]
 
 [dependencies]
-guicons-macros = { path = "../guicons-macros", version = "0.3.1", optional = true }
+guicons-macros = { path = "../guicons-macros", version = "0.3.2", optional = true }
 slint = { version = "1.15.1", optional = true }
 image = { version = "0.25", optional = true, default-features = false, features = ["png"] }
 iced = { version = "0.14", optional = true, features = ["svg", "image"] }
@@ -27,7 +27,7 @@ iced = { version = "0.14", optional = true, features = ["svg", "image"] }
 # `[patch.crates-io] windows-reactor = { git = "...", rev = "..." }`
 # pointing at the fork - this repo's own build resolves the git dep
 # directly and never touches crates.io for it.
-windows-reactor = { git = "https://github.com/Tam1SH/windows-rs", rev = "a27687681", version = "0.0.0", optional = true }
+windows-reactor = { git = "https://github.com/Tam1SH/windows-rs", rev = "fba3ccc1c", version = "0.100.0", optional = true }
 
 [[example]]
 name = "slint_icon"

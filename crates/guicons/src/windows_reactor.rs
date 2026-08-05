@@ -12,18 +12,19 @@ pub fn image_from_path(path: &str) -> windows_reactor::Image {
     windows_reactor::Image::new_with_uri(uri_from_path(path))
 }
 
-pub fn icon_from_path(path: &str, width: f64, height: f64) -> windows_reactor::Icon {
-    let uri = uri_from_path(path);
-    if path.to_ascii_lowercase().ends_with(".svg") {
-        windows_reactor::Icon::svg(uri, width, height)
-    } else {
-        windows_reactor::Icon::bitmap(uri)
-    }
+/// Size-less: an `IconElement` slot (button/nav-item icon, ...) has no place
+/// to apply a width/height anyway - sizing only matters for the
+/// [`icon_builder`]/[`IconBuilder::build_element`] path, which returns a
+/// plain sized `Image` instead of going through `Icon` at all.
+pub fn icon_from_path(path: &str) -> windows_reactor::Icon {
+    windows_reactor::Icon::image(uri_from_path(path))
 }
 
 /// What `icon!(...)` expands to under the `windows-reactor` feature: an icon
-/// with the source resolved, but the size left to the use site. Finishes via
-/// `.build()` or anywhere `Into<windows_reactor::Icon>` is accepted.
+/// with the source resolved, sizing applied only if the call site actually
+/// wants a standalone sized image ([`IconBuilder::build_element`]) - `.build()`
+/// for an `IconElement` slot ignores it, since `windows_reactor::Icon` has no
+/// size field to put it in.
 pub struct IconBuilder {
     path: String,
     width: Option<f64>,
@@ -51,12 +52,20 @@ impl IconBuilder {
         self
     }
 
+    /// For an `IconElement` slot (button/nav-item `.icon(...)`) - no size
+    /// applied, `windows_reactor::Icon` has nowhere to put it.
     pub fn build(self) -> windows_reactor::Icon {
-        icon_from_path(
-            &self.path,
-            self.width.unwrap_or(DEFAULT_ICON_SIZE),
-            self.height.unwrap_or(DEFAULT_ICON_SIZE),
-        )
+        icon_from_path(&self.path)
+    }
+
+    /// For a standalone, explicitly-sized icon (a table cell, a custom
+    /// layout) - bypasses `Icon` entirely and returns a real `Image` with
+    /// `.width()/.height()` already applied.
+    pub fn build_element(self) -> windows_reactor::Element {
+        use windows_reactor::ElementExt;
+        windows_reactor::Element::from(image_from_path(&self.path))
+            .width(self.width.unwrap_or(DEFAULT_ICON_SIZE))
+            .height(self.height.unwrap_or(DEFAULT_ICON_SIZE))
     }
 }
 
