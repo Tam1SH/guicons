@@ -25,13 +25,12 @@ iced = { version = "0.14", optional = true, features = ["svg", "image"] }
 # install of guicons need their own
 # `[patch.crates-io] windows-reactor = { git = "...", rev = "..." }`
 # pointing at the fork (see this workspace's own root Cargo.toml). The
-# wildcard `*` (not a pinned "0.0.0") is deliberate: Cargo's `[patch]`
-# swap only applies when the patch's version is semver-compatible with
-# the declared requirement, and 0.0.x buckets are each their own
-# incompatible "major" under SemVer's zero-major rule - a pinned "0.0.0"
-# would match crates.io's placeholder but silently fail to be patched
-# to the fork's real (and independently drifting) version.
-windows-reactor = { version = "*", optional = true }
+# requirement is pinned to "0.0.0" because that is simultaneously the
+# version of the reserved crates.io placeholder (so `cargo publish`,
+# which re-resolves against the registry, is satisfied - a wildcard is
+# rejected server-side on upload) and the version the fork's crate
+# declares, so the `[patch]` swap stays semver-compatible.
+windows-reactor = { version = "0.0.0", optional = true }
 
 [[example]]
 name = "slint_icon"

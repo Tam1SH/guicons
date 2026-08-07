@@ -12,4 +12,4 @@ repository = "https://github.com/Tam1SH/guicons"
 # dependency comment) - this repo's own `--features windows-reactor` builds need the
 # real fork source, not the "0.0.0" placeholder that satisfies `cargo publish`.
 [patch.crates-io]
-windows-reactor = { git = "https://github.com/Tam1SH/windows-rs", rev = "fba3ccc1c" }
+windows-reactor = { git = "https://github.com/Tam1SH/windows-rs", rev = "d0fd3ce88" }
